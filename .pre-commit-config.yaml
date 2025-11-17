@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025-present K. S. Ernest (iFire) Lee
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^thirdparty/
+      - id: end-of-file-fixer
+        exclude: ^thirdparty/
+      - id: check-yaml
+        exclude: ^thirdparty/
+      - id: check-json
+        exclude: ^thirdparty/
+      - id: check-added-large-files
+        exclude: ^thirdparty/
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.39.0
+    hooks:
+      - id: markdownlint
+        args: [--fix, --config, .markdownlint.json]
+        exclude: ^thirdparty/
+
+  # Elixir formatting
+  - repo: local
+    hooks:
+      - id: mix-format
+        name: mix format
+        entry: mix format
+        language: system
+        types: [file]
+        files: \.(ex|exs)$
+        exclude: ^thirdparty/
+        pass_filenames: false
+        always_run: true
