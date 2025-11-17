@@ -9,7 +9,10 @@ defmodule AriaLbfgspp.Application do
   def start(_type, _args) do
     children = [
       {Registry, keys: :unique, name: AriaLbfgspp.Server.Registry},
-      {Agent, fn -> %{} end, name: AriaLbfgspp.InstanceStore},
+      %{
+        id: AriaLbfgspp.InstanceStore,
+        start: {Agent, :start_link, [fn -> %{} end, [name: AriaLbfgspp.InstanceStore]]}
+      },
       AriaLbfgspp.Repo
     ]
 

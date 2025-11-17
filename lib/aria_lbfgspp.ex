@@ -132,9 +132,11 @@ defmodule AriaLbfgspp do
       {:error, "param_spaces cannot be empty"}
     else
       # Extract initial point from search_center values
+      # Ensure all values are floats (NIF requires doubles)
       initial_point =
         Enum.map(param_spaces, fn space ->
-          Map.get(space, "search_center", 0.0)
+          value = Map.get(space, "search_center", 0.0)
+          if is_integer(value), do: value * 1.0, else: value
         end)
 
       instance_id = "default"
@@ -174,20 +176,28 @@ defmodule AriaLbfgspp do
         {:error, "LBFGS++ not initialized. Call init/2 first."}
 
       instance_id ->
-        case Server.get_current_point(instance_id) do
-          {:ok, point_vec} ->
-            # Convert vector to map using param_spaces
-            case Server.get_param_spaces(instance_id) do
-              {:ok, param_spaces} ->
-                suggestion_map = vector_to_map(point_vec, param_spaces)
-                {:ok, suggestion_map}
+        try do
+          case Server.get_current_point(instance_id) do
+            {:ok, point_vec} ->
+              # Convert vector to map using param_spaces
+              case Server.get_param_spaces(instance_id) do
+                {:ok, param_spaces} ->
+                  suggestion_map = vector_to_map(point_vec, param_spaces)
+                  {:ok, suggestion_map}
 
-              {:error, reason} ->
-                {:error, reason}
-            end
+                {:error, reason} ->
+                  {:error, reason}
+              end
 
-          {:error, reason} ->
-            {:error, reason}
+            {:error, reason} ->
+              {:error, reason}
+          end
+        rescue
+          e ->
+            {:error, "Instance not available: #{Exception.message(e)}"}
+        catch
+          :exit, {:noproc, _} ->
+            {:error, "LBFGS++ not initialized. Call init/2 first."}
         end
     end
   end
@@ -215,36 +225,44 @@ defmodule AriaLbfgspp do
         {:error, "LBFGS++ not initialized. Call init/2 first."}
 
       instance_id ->
-        case Server.get_param_spaces(instance_id) do
-          {:ok, param_spaces} ->
-            # Convert input map to vector
-            input_vec = map_to_vector(input, param_spaces)
+        try do
+          case Server.get_param_spaces(instance_id) do
+            {:ok, param_spaces} ->
+              # Convert input map to vector
+              input_vec = map_to_vector(input, param_spaces)
 
-            # Get current point for gradient computation
-            case Server.get_current_point(instance_id) do
-              {:ok, current_point} ->
-                # Store this observation for gradient computation
-                Server.add_observation(instance_id, input_vec, output)
+              # Store this observation for gradient computation
+              Server.add_observation(instance_id, input_vec, output)
 
-                # Compute numerical gradient using stored observations
-                gradient =
-                  compute_numerical_gradient(instance_id, input_vec, output, param_spaces)
+              # Get current point for gradient computation
+              case Server.get_current_point(instance_id) do
+                {:ok, current_point} ->
+                  # Compute numerical gradient using stored observations
+                  gradient =
+                    compute_numerical_gradient(instance_id, current_point, output, param_spaces)
 
-                # Perform optimization step
-                case Server.optimize_step(instance_id, output, gradient) do
-                  {:ok, _next_point} ->
-                    {:ok, :observed}
+                  # Perform optimization step
+                  case Server.optimize_step(instance_id, output, gradient) do
+                    {:ok, _next_point} ->
+                      {:ok, :observed}
 
-                  {:error, reason} ->
-                    {:error, reason}
-                end
+                    {:error, reason} ->
+                      {:error, reason}
+                  end
 
-              {:error, reason} ->
-                {:error, reason}
-            end
+                {:error, reason} ->
+                  {:error, reason}
+              end
 
-          {:error, reason} ->
-            {:error, reason}
+            {:error, reason} ->
+              {:error, reason}
+          end
+        rescue
+          e ->
+            {:error, "Instance not available: #{Exception.message(e)}"}
+        catch
+          :exit, {:noproc, _} ->
+            {:error, "LBFGS++ not initialized. Call init/2 first."}
         end
     end
   end
@@ -380,12 +398,22 @@ defmodule AriaLbfgspp do
 
     # Use a small random direction scaled by the objective value
     # This encourages exploration while respecting the objective magnitude
-    base_scale = if objective_value > 0, do: -0.01, else: 0.01
+    # Scale by the magnitude of current_point to maintain appropriate step sizes
+    point_magnitude =
+      current_point
+      |> Enum.map(fn x -> x * x end)
+      |> Enum.sum()
+      |> :math.sqrt()
+      # Avoid division by zero
+      |> max(1.0)
 
-    Enum.map(1..dimension, fn i ->
+    base_scale = if objective_value > 0, do: -0.01, else: 0.01
+    scale_factor = base_scale * abs(objective_value) / point_magnitude
+
+    Enum.map(1..dimension, fn _ ->
       # Small random component for each dimension
       # This breaks symmetry and helps with initial exploration
-      :rand.uniform() * base_scale * abs(objective_value)
+      :rand.uniform() * scale_factor
     end)
   end
 

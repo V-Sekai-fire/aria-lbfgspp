@@ -50,3 +50,6 @@ Thumbs.db
 
 # Elixir Language Server
 .elixir_ls/
+
+# Release artifacts
+_build/*/rel/
