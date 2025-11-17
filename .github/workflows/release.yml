@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0-beta.1)'
+        required: true
+        type: string
+      publish_to_hex:
+        description: 'Publish to Hex.pm'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "28"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Build NIF
+        run: make
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile
+        run: mix compile
+
+      - name: Run tests
+        run: mix test
+
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Run Credo
+        run: mix credo --strict
+        continue-on-error: true
+
+      - name: Generate documentation
+        run: mix docs
+
+      - name: Update version in mix.exs
+        if: ${{ github.event.inputs.version != '' }}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          sed -i "s/version: \".*\"/version: \"$VERSION\"/" mix.exs
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add mix.exs
+          git commit -m "Bump version to $VERSION" || true
+
+      - name: Create git tag
+        if: ${{ github.event.inputs.version != '' }}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          git tag -a "v$VERSION" -m "Release $VERSION"
+          git push origin "v$VERSION" || true
+
+      - name: Build Hex package
+        run: mix hex.build
+
+      - name: Publish to Hex.pm
+        if: ${{ github.event.inputs.publish_to_hex == 'true' }}
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: |
+          mix hex.publish --yes
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.version != '' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "v${{ github.event.inputs.version }}"
+          name: "Release ${{ github.event.inputs.version }}"
+          body: |
+            Release ${{ github.event.inputs.version }}
+
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+          draft: false
+          prerelease: ${{ contains(github.event.inputs.version, 'beta') || contains(github.event.inputs.version, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
