@@ -93,7 +93,7 @@ mix test
 
 ## Gotchas
 
-- **NIF compilation required**: Must run `make` before `mix compile` or tests will fail
+- **NIF compilation automatic**: `make` runs automatically via `elixir_make` compiler before `mix compile`
 - **Observation history bounded**: Last 10 observations only (memory management)
 - **Instance cleanup**: Always call `stop/1` to free native resources
 - **Sequential tests**: Tests use `async: false` due to NIF constraints

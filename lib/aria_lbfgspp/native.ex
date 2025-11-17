@@ -9,18 +9,26 @@ defmodule AriaLbfgspp.Native do
   @on_load :load_nif
 
   def load_nif do
-    # Try to load from priv/native relative to the application
+    # Load from priv/native relative to the application
     nif_path = Application.app_dir(:aria_lbfgspp, "priv/native/libaria_lbfgspp")
 
-    # Fallback: try loading from current directory if app_dir doesn't work
     case :erlang.load_nif(String.to_charlist(nif_path), 0) do
       :ok ->
         :ok
 
-      {:error, _} ->
-        # Try relative path as fallback
-        relative_path = Path.join([__DIR__, "../../../priv/native/libaria_lbfgspp"])
-        :erlang.load_nif(String.to_charlist(relative_path), 0)
+      {:error, {:load_failed, reason}} ->
+        raise """
+        Failed to load NIF library: #{inspect(reason)}
+
+        Expected path: #{nif_path}.so
+
+        Please ensure:
+        1. NIF is compiled: run 'make' in the project root
+        2. NIF exists at: #{nif_path}.so
+        """
+
+      {:error, reason} ->
+        raise "Failed to load NIF library: #{inspect(reason)}"
     end
   end
 
@@ -74,8 +82,6 @@ defmodule AriaLbfgspp.Native do
   end
 
   # NIF function stubs (will be replaced by C NIFs when loaded)
-  def test_nif, do: :erlang.nif_error(:nif_not_loaded)
-
   def init_nif(_dimension, _epsilon, _max_iterations, _m, _past, _delta, _max_step, _epsilon_rel),
     do: :erlang.nif_error(:nif_not_loaded)
 

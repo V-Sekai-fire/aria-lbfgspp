@@ -5,3 +5,4 @@ ExUnit.start()
 
 Code.require_file("test/fixtures/param_spaces.exs")
 Code.require_file("test/fixtures/lbfgspp_config.exs")
+Code.require_file("test/fixtures/scenario_helpers.exs")

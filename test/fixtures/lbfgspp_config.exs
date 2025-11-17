@@ -67,4 +67,20 @@ defmodule AriaLbfgspp.TestFixtures.LbfgsppConfig do
       "epsilon_rel" => 1.0e-8
     }
   end
+
+  @doc """
+  Returns a LBFGS++ configuration optimized for scenario testing.
+  Balanced between speed and accuracy.
+  """
+  def scenario_config do
+    %{
+      "epsilon" => 1.0e-5,
+      "max_iterations" => 100,
+      "m" => 6,
+      "past" => 0,
+      "delta" => 0.0,
+      "max_step" => 1.0e20,
+      "epsilon_rel" => 1.0e-5
+    }
+  end
 end
